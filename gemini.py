@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from app import db  # Import Firestore client from app.py
 
 # Configure your API key
-genai.configure(api_key="")
+genai.configure(api_key="AIzaSyDHieynF4wIDtQoogbBJmDZv2szFja8g5U")
 
 def download_video_from_url(url, output_dir="downloads"):
     if not os.path.exists(output_dir):
@@ -119,7 +119,7 @@ def analyze_video(file):
         return f"Error during video analysis: {e}"
 
 def save_result_to_firebase(analysis_result, collection_id, video_id):
-    """Save the analysis result to Firebase, even if it has extra symbols."""
+    """Save the analysis result and its embedding to Firebase."""
     try:
         # Remove extra symbols such as ```json and ```
         clean_result = re.sub(r"```json|```", "", analysis_result).strip()
@@ -129,14 +129,28 @@ def save_result_to_firebase(analysis_result, collection_id, video_id):
         
         # Add the video_id to the parsed JSON data
         analysis_data['_id'] = video_id
+
+        # Create an embedding for the text fields (e.g., summary)
+        embedding_input = f"{analysis_data.get('summary', '')} {', '.join(analysis_data.get('tags', []))} {', '.join(analysis_data.get('keywords', []))}"
         
+        # Generate embedding using Gemini API
+        embedding_result = genai.embed_content(
+            model="models/text-embedding-004",  # Use the appropriate model
+            content=embedding_input,               # Concatenate relevant fields for embedding
+            task_type="retrieval_document"
+        )
+        embedding_vector = embedding_result['embedding']
+        
+        # Add the embedding to the analysis data
+        analysis_data['embedding'] = embedding_vector
+
         # Reference to the specific collection and video in Firestore
         doc_ref = db.collection('collections').document(collection_id).collection('videos').document(video_id)
         
-        # Save the cleaned and structured JSON to Firestore
+        # Save the cleaned and structured JSON with embeddings to Firestore
         doc_ref.set(analysis_data)
         
-        print(f"Analysis result saved to Firebase for video ID {video_id}")
+        print(f"Analysis result and embedding saved to Firebase for video ID {video_id}")
     
     except json.JSONDecodeError as e:
         # Handle invalid JSON
