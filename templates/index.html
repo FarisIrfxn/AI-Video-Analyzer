@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <title>DuriooGemini</title>
+    <link rel="stylesheet" href="/static/styles/style.css">
+    <link rel="icon" href="/static/assets/web-logo.ico" type="image/x-icon">
+</head>
+<body>
+
+<div class="header">
+    <div class="logo-title">
+        <img src="/static/assets/logo.png" alt="Logo" class="logo"> <!-- Update with your logo path -->
+    </div>
+    <div class="header-buttons">
+        <button id="pricing-button">Pricing</button>
+        <button id="docs-button">Docs</button>
+    </div>
+</div>
+
+<!-- Title and Description -->
+<div class="title-description">
+    <h1>AI Video Analyzer</h1>
+    <p>Designed specifically for Durioo, this tool seamlessly extracts and analyzes video metadata, helping you optimize your content like never before.</p>
+</div>
+
+<!-- Let's Jom Button -->
+<div class="button-container">
+    <button id="lets-jom-button">Let's Jom</button>
+</div>
+
+<!-- Collection Info (Initially Hidden) -->
+<div id="collection-info" class="hidden">
+    <div class="collection-info-thumbnail">
+        <img id="collection-thumbnail" src="" alt="Collection Thumbnail">
+    </div>
+    <div class="collection-info-details">
+        <h2 id="collection-title"></h2>
+        <div class="select-all-container">
+            <input type="checkbox" id="select-all-videos">
+            <label for="select-all-videos">Select All Videos</label>
+        </div>
+        <div class="button-container">
+            <button id="process-button">Process Selected Videos</button>
+        </div>
+    </div>
+</div>
+
+<!-- Search Box and Collection List Container -->
+<div id="collection-container" class="hidden">
+    <div class="search-container">
+        <input type="text" id="search-box" placeholder="Search collections...">
+    </div>
+    <div id="collection-list"></div>
+</div>
+
+<!-- Loading Animation and Text -->
+<div id="loading" style="display:none;" class="loading-container">
+    <div class="spinner"></div>
+    <p class="loading-text">Loading Collections...</p>
+</div>
+
+<!-- Video Selection and Process -->
+<form id="videos-form" style="display:none;">
+    <div id="videos-list"></div>
+</form>
+
+<!-- Bey Soba Bey Loading Animation and Text -->
+<div id="processing" style="display:none;" class="loading-container">
+    <div class="spinner"></div>
+    <p class="loading-text">Bey Soba Bey...</p>
+</div>
+
+<!-- Output List -->
+<div id="output-list" style="display:none;"></div>
+
+<script>
+    document.getElementById('lets-jom-button').addEventListener('click', function() {
+        document.body.classList.add('jom-pressed');
+        document.querySelector('.title-description h1').style.fontSize = '28px';
+        document.querySelector('.title-description p').style.display = 'none';
+        document.getElementById('lets-jom-button').style.display = 'none';
+
+        document.getElementById('loading').style.display = 'block';
+
+        fetch('/get_collections')
+            .then(response => response.json())
+            .then(collections => {
+                document.getElementById('loading').style.display = 'none';
+
+                // Show collection container
+                const collectionContainer = document.getElementById('collection-container');
+                collectionContainer.classList.remove('hidden');
+
+                const collectionList = document.getElementById('collection-list');
+                collectionList.innerHTML = ''; // Clear any existing content
+
+                collections.forEach(collection => {
+                    const collectionItem = document.createElement('div');
+                    collectionItem.classList.add('collection-item');
+                    
+                    const thumbnail = collection.image_thumbnail || '/static/assets/default-thumbnail.png';
+                    const name = collection.name || 'Untitled';
+                    const id = collection._id;
+                    const videoCount = collection.video_count || 0;
+                    const processedCount = collection.processed_count || 0;
+
+                    collectionItem.innerHTML = `
+                        <img src="${thumbnail}" alt="${name}" class="collection-thumbnail">
+                        <h3 class="collection-name">${name}</h3>
+                        <div class="collection-count">${processedCount}/${videoCount} Videos Processed</div>
+                    `;
+
+                    collectionItem.addEventListener('click', function() {
+                        showCollectionInfo(thumbnail, name);
+                        loadVideos(id);
+                    });
+
+                    collectionList.appendChild(collectionItem);
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching collections:', error);
+            });
+    });
+
+    function showCollectionInfo(thumbnail, title) {
+        const collectionInfo = document.getElementById('collection-info');
+        document.getElementById('collection-thumbnail').src = thumbnail;
+        document.getElementById('collection-title').textContent = title;
+        collectionInfo.style.display = 'flex'; // Show the collection info section
+
+        // Hide the collection container when showing collection info
+        document.getElementById('collection-container').classList.add('hidden');
+    }
+
+    function loadVideos(collectionId) {
+        // Show loading animation while fetching videos
+        document.getElementById('loading').style.display = 'block';
+
+        fetch('/load_videos', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ _id: collectionId })
+        })
+        .then(response => response.json())
+        .then(videos => {
+            // Hide loading animation
+            document.getElementById('loading').style.display = 'none';
+
+            // Hide collection container to make space for the videos
+            document.getElementById('collection-container').classList.add('hidden');
+
+            // Show video list and process button
+            const videosForm = document.getElementById('videos-form');
+            const videosList = document.getElementById('videos-list');
+            videosList.innerHTML = ''; // Clear any existing content
+
+            // Fetch processed videos for the specific collection
+            fetch('/get_processed_videos')
+                .then(response => response.json())
+                .then(processedVideos => {
+                    const processedVideoIds = processedVideos[collectionId] || [];
+
+                    videos.forEach(video => {
+                        const thumbnail = video.videos.image_thumbnail || '/static/assets/default-thumbnail.png';
+                        const title = video.videos.title || 'Untitled';
+                        const sd = video.videos.transcoded?.sd || '';
+                        const videoId = video._id;
+
+                        const isProcessed = processedVideoIds.includes(videoId);
+
+                        const videoItem = document.createElement('div');
+                        videoItem.classList.add('video-item');
+                        if (isProcessed) {
+                            videoItem.classList.add('processed');
+                        }
+
+                        videoItem.innerHTML = `
+                            <input type="checkbox" name="video" value="${sd}" id="video-${videoId}" ${isProcessed ? 'disabled' : ''}>
+                            <img src="${thumbnail}" alt="${title}" class="thumbnail" onerror="this.onerror=null;this.src='/static/assets/default-thumbnail.png';">
+                            <label for="video-${videoId}">
+                                <h3>${title}</h3>
+                            </label>
+                        `;
+
+                        videosList.appendChild(videoItem);
+                    });
+
+                    document.getElementById('select-all-videos').addEventListener('change', function() {
+                        const isChecked = this.checked;
+                        const checkboxes = videosList.querySelectorAll('input[type="checkbox"]:not(:disabled)');
+                        checkboxes.forEach(checkbox => {
+                            checkbox.checked = isChecked;
+                        });
+                    });
+
+                    videosForm.style.display = 'block';
+                })
+                .catch(error => console.error('Error fetching processed videos:', error));
+        })
+        .catch(error => {
+            console.error('Error loading videos:', error);
+        });
+    }
+
+    document.getElementById('process-button').addEventListener('click', function(e) {
+        e.preventDefault();
+
+        const selectedVideos = Array.from(document.querySelectorAll('input[name="video"]:checked'))
+                                    .map(input => input.value);
+
+        if (selectedVideos.length === 0) {
+            showAlertMessage("Please select at least one video.");
+            return;
+        }
+
+        // Hide the "Select All Videos" checkbox and label, and the "Process Selected Videos" button
+        document.getElementById('select-all-videos').style.display = 'none';
+        document.querySelector('label[for="select-all-videos"]').style.display = 'none';
+        document.getElementById('process-button').style.display = 'none';
+
+        // Hide the video list and show "Bey Soba Bey" loading animation
+        document.getElementById('videos-form').style.display = 'none';
+        document.getElementById('processing').style.display = 'block';
+
+        fetch('/process_selected_videos', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ video_urls: selectedVideos })
+        })
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('processing').style.display = 'none';  // Hide "Bey Soba Bey" loading animation
+            const outputList = document.getElementById('output-list');
+            outputList.innerHTML = '';          // Clear the output list
+
+            // Display status for each processed video
+            data.processed_videos.forEach(video => {
+                const videoItem = document.createElement('div');
+                videoItem.classList.add('video-item');
+
+                videoItem.innerHTML = `
+                    <img src="${video.thumbnail}" alt="${video.title}" class="thumbnail">
+                    <label>
+                        <h3>${video.title}</h3>
+                        <p>Status: ${video.status}</p>
+                    </label>
+                `;
+                outputList.appendChild(videoItem);
+            });
+
+            outputList.style.display = 'block';  // Show the output list with statuses
+        })
+        .catch(error => {
+            console.error('Error processing videos:', error);
+        });
+    });
+
+    function showAlertMessage(message) {
+        // Create the message box element
+        const messageBox = document.createElement('div');
+        messageBox.className = 'message-box';
+        messageBox.innerHTML = `
+            <p>${message}</p>
+            <button class="close-button">Close</button>
+        `;
+
+        // Append the message box to the body
+        document.body.appendChild(messageBox);
+
+        // Add event listener to close the message box
+        document.querySelector('.message-box .close-button').addEventListener('click', function() {
+            messageBox.remove();
+        });
+    }
+
+    // Function to filter the collection items based on search input
+    document.getElementById('search-box').addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase();
+        const collectionItems = document.querySelectorAll('.collection-item');
+
+        collectionItems.forEach(item => {
+            const collectionName = item.querySelector('.collection-name').textContent.toLowerCase();
+            if (collectionName.includes(searchTerm)) {
+                item.style.display = 'block';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    });
+
+    // Scroll event to make header blur and transparent on scroll
+    document.addEventListener('scroll', function() {
+        const header = document.querySelector('.header');
+        if (window.scrollY > 50) {
+            document.body.classList.add('scrolled');
+        } else {
+            document.body.classList.remove('scrolled');
+        }
+    });
+</script>
+
+</body>
+</html>
