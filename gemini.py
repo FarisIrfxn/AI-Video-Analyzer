@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from app import db  # Import Firestore client from app.py
 
 # Configure your API key
-genai.configure(api_key="AIzaSyDHieynF4wIDtQoogbBJmDZv2szFja8g5U")
+genai.configure(api_key="")
 
 def download_video_from_url(url, output_dir="downloads"):
     if not os.path.exists(output_dir):
